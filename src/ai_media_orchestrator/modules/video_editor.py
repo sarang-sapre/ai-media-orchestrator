@@ -4,7 +4,7 @@ Video editing module using MoviePy.
 
 from pathlib import Path
 from typing import List, Optional
-from moviepy.editor import (
+from moviepy import (
     VideoFileClip,
     AudioFileClip,
     concatenate_videoclips,
