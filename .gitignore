@@ -155,3 +155,6 @@ Thumbs.db
 output/
 temp/
 cache/
+
+# Allow .gitkeep files to track empty directories
+!.gitkeep

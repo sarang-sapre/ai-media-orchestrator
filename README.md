@@ -59,14 +59,25 @@ ai-media-orchestrator/
 ├── src/
 │   └── ai_media_orchestrator/
 │       ├── __init__.py
-│       ├── core/              # Core orchestration logic
-│       ├── generators/        # Content generation modules
-│       ├── processors/        # Media processing utilities
-│       ├── utils/             # Helper functions and utilities
-│       └── config/            # Configuration management
-├── tests/                     # Test suite
-├── examples/                  # Example scripts and usage
-├── docs/                      # Documentation
+│       ├── main.py              # Entry point
+│       ├── config.py            # Settings & env vars
+│       │
+│       ├── modules/
+│       │   ├── __init__.py
+│       │   ├── script_generator.py
+│       │   ├── voice_generator.py
+│       │   ├── stock_video.py
+│       │   ├── video_editor.py
+│       │   └── subtitles.py
+│       │
+│       └── assets/
+│           ├── audio/
+│           ├── video/
+│           └── output/
+│
+├── tests/
+│   └── test_basic.py
+├── .env.example
 ├── .gitignore
 ├── LICENSE
 ├── README.md
@@ -84,13 +95,48 @@ OPENAI_API_KEY=your_openai_api_key_here
 
 ## 💻 Usage
 
+### Running the Main Pipeline
+
+```bash
+python -m ai_media_orchestrator.main
+```
+
+### Using Individual Modules
+
 ```python
-from ai_media_orchestrator import Orchestrator
+from ai_media_orchestrator.modules import (
+    ScriptGenerator,
+    VoiceGenerator,
+    StockVideoFetcher,
+    VideoEditor,
+    SubtitleGenerator
+)
 
-# Initialize the orchestrator
-orchestrator = Orchestrator()
+# Generate a script
+script_gen = ScriptGenerator()
+script = script_gen.generate_script(
+    topic="The Future of AI",
+    duration=60,
+    style="informative"
+)
 
-# Your automation workflow here
+# Generate voice from script
+voice_gen = VoiceGenerator()
+audio_path = voice_gen.generate_voice(script)
+
+# Fetch stock videos
+video_fetcher = StockVideoFetcher()
+video_paths = video_fetcher.fetch_videos_for_script(script)
+
+# Edit and combine
+editor = VideoEditor()
+final_video = editor.create_video_from_clips(video_paths, audio_path)
+
+# Generate subtitles
+subtitle_gen = SubtitleGenerator()
+subtitle_path = subtitle_gen.generate_srt(audio_path)
+
+print(f"✅ Video created: {final_video}")
 ```
 
 ## 🧪 Development
