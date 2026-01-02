@@ -1,0 +1,44 @@
+[project]
+name = "ai-media-orchestrator"
+version = "0.1.0"
+description = "AI-powered orchestration pipeline for automating no-face videos and media content"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [
+    { name = "Sarang Sapre", email = "sarang.sapre89@gmail.com" }
+]
+
+dependencies = [
+    "openai>=1.0.0",
+    "moviepy>=1.0.3",
+    "requests>=2.31.0",
+    "python-dotenv>=1.0.0",
+    "pydub>=0.25.1",
+    "openai-whisper @ git+https://github.com/openai/whisper.git"
+]
+
+[project.optional-dependencies]
+dev = [
+    "black",
+    "ruff",
+    "pytest"
+]
+
+[tool.black]
+line-length = 88
+target-version = ["py39"]
+
+[tool.ruff]
+select = ["E", "F", "I"]
+line-length = 88
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+ai_media_orchestrator = ["py.typed"]
