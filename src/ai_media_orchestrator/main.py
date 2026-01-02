@@ -22,10 +22,14 @@ def main():
     
     print("🎬 AI Media Orchestrator")
     print(f"Version: {settings.VERSION}")
+    print(f"Active Provider: {settings.get_active_provider().upper()}")
     print("-" * 50)
     
     # TODO: Implement orchestration workflow
     # 1. Generate script
+    script_generator = ScriptGenerator()
+    script = script_generator.generate_script("This is a test script.")
+    print(f"Generated script: {script}")
     # 2. Generate voice
     # 3. Fetch stock videos
     # 4. Edit video

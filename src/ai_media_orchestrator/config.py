@@ -35,6 +35,10 @@ class Settings:
     # OpenAI Configuration
     OPENAI_API_KEY: Optional[str] = os.getenv("OPENAI_API_KEY")
     OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", "gpt-4")
+
+    # Ollama Configuration (Local LLM)
+    OLLAMA_BASE_URL: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
+    OLLAMA_MODEL: str = os.getenv("OLLAMA_MODEL", "llama3")
     
     # Voice Generation
     VOICE_MODEL: str = os.getenv("VOICE_MODEL", "tts-1")
@@ -59,13 +63,14 @@ class Settings:
     def get_active_provider(self) -> str:
         """Determine which AI provider to use based on configuration."""
         if self.AI_PROVIDER == "auto":
-            # Auto-select: prefer Gemini (free) if available, otherwise OpenAI
+            # Auto-select: prefer Gemini (free) if available, otherwise OpenAI, then Ollama
             if self.GEMINI_API_KEY:
                 return "gemini"
             elif self.OPENAI_API_KEY:
                 return "openai"
             else:
-                raise ValueError("No AI API key configured. Please set GEMINI_API_KEY or OPENAI_API_KEY")
+                # Fallback to Ollama if no keys are present (assuming local setup)
+                return "ollama"
         elif self.AI_PROVIDER == "gemini":
             if not self.GEMINI_API_KEY:
                 raise ValueError("GEMINI_API_KEY is required when AI_PROVIDER is set to 'gemini'")
@@ -74,17 +79,19 @@ class Settings:
             if not self.OPENAI_API_KEY:
                 raise ValueError("OPENAI_API_KEY is required when AI_PROVIDER is set to 'openai'")
             return "openai"
+        elif self.AI_PROVIDER == "ollama":
+            return "ollama"
         else:
-            raise ValueError(f"Invalid AI_PROVIDER: {self.AI_PROVIDER}. Must be 'gemini', 'openai', or 'auto'")
+            raise ValueError(f"Invalid AI_PROVIDER: {self.AI_PROVIDER}. Must be 'gemini', 'openai', 'ollama', or 'auto'")
     
     def validate(self) -> bool:
         """Validate required settings."""
         # Check that at least one AI provider is configured
-        if not self.GEMINI_API_KEY and not self.OPENAI_API_KEY:
-            raise ValueError(
-                "At least one AI API key is required. "
-                "Please set GEMINI_API_KEY (free) or OPENAI_API_KEY in your .env file"
-            )
+        if not self.GEMINI_API_KEY and not self.OPENAI_API_KEY and self.AI_PROVIDER != "ollama":
+            # If auto mode, we default to ollama if keys are missing, so this might not be reached in auto mode 
+            # unless we want to strictly enforce keys for cloud providers.
+            # But let's assume if no keys, we might be trying ollama.
+            pass
         # Validate the active provider
         self.get_active_provider()
         return True
