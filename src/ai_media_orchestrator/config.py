@@ -23,7 +23,10 @@ class Settings:
     ASSETS_DIR = Path(__file__).parent / "assets"
     AUDIO_DIR = ASSETS_DIR / "audio"
     VIDEO_DIR = ASSETS_DIR / "video"
+    VIDEO_DIR = ASSETS_DIR / "video"
     OUTPUT_DIR = ASSETS_DIR / "output"
+    MODELS_DIR = ASSETS_DIR / "models"
+
     
     # AI Provider Configuration
     AI_PROVIDER: str = os.getenv("AI_PROVIDER", "auto")  # 'gemini', 'openai', or 'auto'
@@ -42,11 +45,19 @@ class Settings:
     
     # Voice Generation
     VOICE_MODEL: str = os.getenv("VOICE_MODEL", "tts-1")
+    VOICE_MODEL: str = os.getenv("VOICE_MODEL", "tts-1")
     VOICE_NAME: str = os.getenv("VOICE_NAME", "alloy")
+    
+    # Piper TTS
+    PIPER_MODEL_NAME: str = os.getenv("PIPER_MODEL_NAME", "en_US-lessac-medium")
+
     
     # Video Settings
     VIDEO_RESOLUTION: str = os.getenv("VIDEO_RESOLUTION", "1920x1080")
     VIDEO_FPS: int = int(os.getenv("VIDEO_FPS", "30"))
+    
+    # Stock Video Settings
+    STOCK_VIDEO_API_KEY: Optional[str] = os.getenv("PIXABAY_API_KEY")
     
     # Output Settings
     OUTPUT_FORMAT: str = os.getenv("OUTPUT_FORMAT", "mp4")
@@ -57,7 +68,7 @@ class Settings:
     
     def _create_directories(self):
         """Create asset directories if they don't exist."""
-        for directory in [self.AUDIO_DIR, self.VIDEO_DIR, self.OUTPUT_DIR]:
+        for directory in [self.AUDIO_DIR, self.VIDEO_DIR, self.OUTPUT_DIR, self.MODELS_DIR]:
             directory.mkdir(parents=True, exist_ok=True)
     
     def get_active_provider(self) -> str:

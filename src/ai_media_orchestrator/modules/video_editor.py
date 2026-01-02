@@ -1,29 +1,42 @@
 """
-Video editing module using MoviePy.
+Video editing module using FFmpeg directly.
 """
 
+import subprocess
+import imageio_ffmpeg
 from pathlib import Path
 from typing import List, Optional
-from moviepy import (
-    VideoFileClip,
-    AudioFileClip,
-    concatenate_videoclips,
-    CompositeVideoClip
-)
 
 from ai_media_orchestrator.config import settings
 
 
 class VideoEditor:
     """
-    Handles video editing operations using MoviePy.
+    Handles video editing operations using FFmpeg directly.
     """
     
     def __init__(self):
         """Initialize the video editor."""
         self.output_dir = settings.OUTPUT_DIR
         self.fps = settings.VIDEO_FPS
+        self.ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
     
+    def _run_ffmpeg(self, cmd: List[str]):
+        """Helper to run ffmpeg command."""
+        try:
+            # -y to overwrite output
+            full_cmd = [self.ffmpeg_exe, "-y"] + cmd
+            result = subprocess.run(
+                full_cmd,
+                check=True,
+                capture_output=True,
+                text=True
+            )
+            return result
+        except subprocess.CalledProcessError as e:
+            print(f"FFmpeg Error: {e.stderr}")
+            raise RuntimeError(f"FFmpeg command failed: {e.stderr}") from e
+
     def combine_video_and_audio(
         self,
         video_path: Path,
@@ -31,38 +44,30 @@ class VideoEditor:
         output_path: Optional[Path] = None
     ) -> Path:
         """
-        Combine video with audio track.
-        
-        Args:
-            video_path: Path to video file
-            audio_path: Path to audio file
-            output_path: Path for output file. If None, auto-generates
-        
-        Returns:
-            Path to the output video file
+        Combine video with audio track using FFmpeg.
+        Replaces audio in video with the provided audio file.
+        Loops video if audio is longer, or cuts audio if video is longer? 
+        Standard behavior: usually replace audio stream.
         """
         if output_path is None:
             output_path = self.output_dir / "final_video.mp4"
         
-        video = VideoFileClip(str(video_path))
-        audio = AudioFileClip(str(audio_path))
+        # Command: ffmpeg -i video.mp4 -i audio.mp3 -c:v copy -c:a aac -map 0:v:0 -map 1:a:0 output.mp4
+        # We also want to ensure the audio replaces existing audio (if any).
+        # And we might want to trim/loop. For simple replace:
         
-        # Set audio to video
-        final_video = video.set_audio(audio)
+        cmd = [
+            "-i", str(video_path),
+            "-i", str(audio_path),
+            "-c:v", "copy",
+            "-c:a", "aac",
+            "-map", "0:v:0",
+            "-map", "1:a:0",
+            "-shortest", # Finish when shortest input ends
+            str(output_path)
+        ]
         
-        # Write output
-        final_video.write_videofile(
-            str(output_path),
-            fps=self.fps,
-            codec='libx264',
-            audio_codec='aac'
-        )
-        
-        # Clean up
-        video.close()
-        audio.close()
-        final_video.close()
-        
+        self._run_ffmpeg(cmd)
         return output_path
     
     def concatenate_videos(
@@ -71,32 +76,32 @@ class VideoEditor:
         output_path: Optional[Path] = None
     ) -> Path:
         """
-        Concatenate multiple videos into one.
-        
-        Args:
-            video_paths: List of paths to video files
-            output_path: Path for output file. If None, auto-generates
-        
-        Returns:
-            Path to the concatenated video file
+        Concatenate multiple videos into one using FFmpeg concat demuxer.
         """
         if output_path is None:
             output_path = self.output_dir / "concatenated_video.mp4"
+            
+        # Create a temporary file list for ffmpeg concat
+        list_file_path = self.output_dir / "files.txt"
+        with open(list_file_path, "w") as f:
+            for path in video_paths:
+                # Escape path if necessary, but absolute path usually works.
+                # FFmpeg concat file requires 'file ' prefix and safe paths.
+                safe_path = str(path.absolute()).replace("\\", "/")
+                f.write(f"file '{safe_path}'\n")
         
-        clips = [VideoFileClip(str(path)) for path in video_paths]
-        final_clip = concatenate_videoclips(clips)
+        cmd = [
+            "-f", "concat",
+            "-safe", "0",
+            "-i", str(list_file_path),
+            "-c", "copy",
+            str(output_path)
+        ]
         
-        final_clip.write_videofile(
-            str(output_path),
-            fps=self.fps,
-            codec='libx264',
-            audio_codec='aac'
-        )
+        self._run_ffmpeg(cmd)
         
-        # Clean up
-        for clip in clips:
-            clip.close()
-        final_clip.close()
+        # Cleanup list file
+        list_file_path.unlink(missing_ok=True)
         
         return output_path
     
@@ -108,36 +113,57 @@ class VideoEditor:
         output_path: Optional[Path] = None
     ) -> Path:
         """
-        Trim video to specified time range.
-        
-        Args:
-            video_path: Path to video file
-            start_time: Start time in seconds
-            end_time: End time in seconds
-            output_path: Path for output file. If None, auto-generates
-        
-        Returns:
-            Path to the trimmed video file
+        Trim video to specified time range using FFmpeg.
         """
         if output_path is None:
             output_path = self.output_dir / "trimmed_video.mp4"
         
-        video = VideoFileClip(str(video_path))
-        trimmed = video.subclip(start_time, end_time)
+        duration = end_time - start_time
         
-        trimmed.write_videofile(
-            str(output_path),
-            fps=self.fps,
-            codec='libx264',
-            audio_codec='aac'
-        )
+        cmd = [
+            "-ss", str(start_time),
+            "-i", str(video_path),
+            "-t", str(duration),
+            "-c", "copy",  # Fast seek/copy. might not be frame accurate. re-encoding is safer for precision but slower.
+            # For robustness, let's re-encode lightly or use copy if accepted. 
+            # Re-encoding ensures precise cuts.
+            # "-c:v", "libx264", "-c:a", "aac",
+            str(output_path)
+        ]
         
-        # Clean up
-        video.close()
-        trimmed.close()
+        # Note: placing -ss before -i is faster (input seeking).
         
+        self._run_ffmpeg(cmd)
         return output_path
     
+    def normalize_video(
+        self,
+        video_path: Path,
+        output_path: Optional[Path] = None
+    ) -> Path:
+        """
+        Normalize video to standard format (H.264, AAC, 30fps, 1280x720) to ensure smooth concatenation.
+        """
+        if output_path is None:
+            output_path = self.output_dir / f"norm_{video_path.name}"
+            
+        # Skip if already exists? Maybe not, safer to overwrite/ensure freshness.
+        
+        cmd = [
+            "-i", str(video_path),
+            "-vf", "scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2,fps=30",
+            "-c:v", "libx264",
+            "-preset", "fast",
+            "-crf", "23",
+            "-c:a", "aac",
+            "-ar", "44100",
+            "-ac", "2",
+            str(output_path)
+        ]
+        
+        self._run_ffmpeg(cmd)
+        return output_path
+
     def create_video_from_clips(
         self,
         video_clips: List[Path],
@@ -146,23 +172,66 @@ class VideoEditor:
     ) -> Path:
         """
         Create final video from multiple clips and audio.
-        
-        Args:
-            video_clips: List of video clip paths
-            audio_path: Path to audio file
-            output_path: Path for output file. If None, auto-generates
-        
-        Returns:
-            Path to the final video file
         """
-        # First concatenate all video clips
-        concatenated = self.concatenate_videos(video_clips)
+        # Normalize all clips first
+        normalized_clips = []
+        print("  ...normalizing video clips for concatenation...")
+        for i, clip in enumerate(video_clips):
+            try:
+                norm_path = self.output_dir / f"norm_clip_{i}.mp4"
+                self.normalize_video(clip, output_path=norm_path)
+                normalized_clips.append(norm_path)
+            except Exception as e:
+                print(f"Warning: Failed to normalize clip {clip}: {e}")
         
-        # Then add audio
+        if not normalized_clips:
+            raise ValueError("No valid video clips to process.")
+
+        # First concatenate
+        concat_video = self.output_dir / "temp_concat.mp4"
+        self.concatenate_videos(normalized_clips, output_path=concat_video)
+        
+        # Cleanup normalized clips
+        for clip in normalized_clips:
+            try:
+                clip.unlink(missing_ok=True)
+            except Exception:
+                pass
+        
+        # Then add audio (and trim/loop if needed)
+        # Note: If the concatenated video is shorter/longer than audio?
+        # Ideally we loop video or trim. For now, we just combine.
+        
         final_video = self.combine_video_and_audio(
-            concatenated,
+            concat_video,
             audio_path,
             output_path
         )
         
+        # Cleanup temp
+        concat_video.unlink(missing_ok=True)
+        
         return final_video
+
+    def generate_dummy_video(
+        self,
+        duration: float,
+        output_path: Optional[Path] = None,
+        color: str = "blue"
+    ) -> Path:
+        """
+        Generate a solid color video using FFmpeg.
+        """
+        if output_path is None:
+            output_path = self.output_dir / "dummy_video.mp4"
+            
+        cmd = [
+            "-f", "lavfi",
+            "-i", f"color=c={color}:s=1280x720:d={duration}",
+            "-c:v", "libx264",
+            "-t", str(duration),
+            str(output_path)
+        ]
+        
+        self._run_ffmpeg(cmd)
+        return output_path

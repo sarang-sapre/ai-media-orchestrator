@@ -18,6 +18,8 @@ dependencies = [
     "pydub>=0.25.1",
     "openai-whisper @ git+https://github.com/openai/whisper.git",
     "google-genai>=1.47.0",
+    "imageio-ffmpeg>=0.4.9",
+    "piper-tts>=1.2.0",
 ]
 
 [project.optional-dependencies]

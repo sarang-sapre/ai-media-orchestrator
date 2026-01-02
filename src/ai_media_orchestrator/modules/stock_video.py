@@ -21,7 +21,7 @@ class StockVideoFetcher:
         Args:
             api_key: API key for stock video service (e.g., Pexels, Pixabay)
         """
-        self.api_key = api_key
+        self.api_key = settings.STOCK_VIDEO_API_KEY
         self.video_dir = settings.VIDEO_DIR
     
     def search_videos(
@@ -41,23 +41,47 @@ class StockVideoFetcher:
         Returns:
             List of video metadata dictionaries
         """
-        # TODO: Implement actual API integration (Pexels, Pixabay, etc.)
-        # This is a placeholder implementation
-        
+        if not self.api_key:
+            print("⚠️ No Stock Video API key found. Please set PIXABAY_API_KEY in .env.")
+            return []
+
         print(f"🔍 Searching for videos: {query}")
-        print(f"   Count: {count}, Orientation: {orientation}")
         
-        # Placeholder return
-        return [
-            {
-                "id": i,
-                "url": f"https://example.com/video_{i}.mp4",
-                "duration": 10,
-                "width": 1920,
-                "height": 1080
-            }
-            for i in range(count)
-        ]
+        base_url = "https://pixabay.com/api/videos/"
+        params = {
+            "key": self.api_key,
+            "q": query,
+            "per_page": count,
+            "video_type": "all"
+        }
+        
+        try:
+            response = requests.get(base_url, params=params)
+            response.raise_for_status()
+            data = response.json()
+            
+            videos = []
+            for hit in data.get("hits", []):
+                # Pixabay provides different sizes. 
+                # We'll try to get 'medium' (approx 720p/1080p) or fallback to 'large' then 'small'.
+                video_variants = hit.get("videos", {})
+                variant = video_variants.get("medium") or video_variants.get("large") or video_variants.get("small")
+                
+                if variant:
+                    videos.append({
+                        "id": hit["id"],
+                        "url": variant["url"],
+                        "duration": hit["duration"],
+                        "width": variant["width"],
+                        "height": variant["height"],
+                        "thumbnail": hit.get("userImageURL")  # Fallback to user image if video thumbnail not parsed
+                    })
+            
+            return videos
+            
+        except Exception as e:
+            print(f"❌ Error searching Pixabay: {e}")
+            return []
     
     def download_video(
         self,
@@ -76,19 +100,34 @@ class StockVideoFetcher:
         """
         if output_path is None:
             filename = url.split("/")[-1]
+            # Ensure filename has an extension if missing
+            if "." not in filename:
+                filename += ".mp4"
             output_path = self.video_dir / filename
+            
+        if output_path.exists():
+            print(f"⏭️  Video already exists at: {output_path}")
+            return output_path
         
-        # TODO: Implement actual download logic
         print(f"📥 Downloading video from: {url}")
         print(f"   Saving to: {output_path}")
         
-        # Placeholder - would use requests to download
-        # response = requests.get(url, stream=True)
-        # with open(output_path, 'wb') as f:
-        #     for chunk in response.iter_content(chunk_size=8192):
-        #         f.write(chunk)
-        
-        return output_path
+        try:
+            response = requests.get(url, stream=True)
+            response.raise_for_status()
+            
+            with open(output_path, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    f.write(chunk)
+            
+            print(f"✅ Download complete: {output_path}")
+            return output_path
+            
+        except Exception as e:
+            print(f"❌ Error downloading video: {e}")
+            if output_path.exists():
+                output_path.unlink()  # Remove partial file
+            raise e
     
     def fetch_videos_for_script(
         self,
@@ -113,7 +152,7 @@ class StockVideoFetcher:
         
         video_paths = []
         for keyword in keywords:
-            videos = self.search_videos(keyword, count=2)
+            videos = self.search_videos(keyword, count=5)
             for video in videos:
                 path = self.download_video(video["url"])
                 video_paths.append(path)
