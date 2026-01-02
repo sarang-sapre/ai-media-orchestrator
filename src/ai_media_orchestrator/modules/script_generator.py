@@ -1,28 +1,26 @@
 """
-Script generation module using OpenAI GPT models.
+Script generation module using AI (supports OpenAI and Google Gemini).
 """
 
 from typing import Optional, Dict, Any
-from openai import OpenAI
 
 from ai_media_orchestrator.config import settings
+from ai_media_orchestrator.modules.ai_client import AIClient
 
 
 class ScriptGenerator:
     """
-    Generates video scripts using OpenAI's GPT models.
+    Generates video scripts using AI models (OpenAI GPT or Google Gemini).
     """
     
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self, provider: Optional[str] = None):
         """
         Initialize the script generator.
         
         Args:
-            api_key: OpenAI API key. If None, uses settings.OPENAI_API_KEY
+            provider: AI provider to use ('gemini', 'openai', or None for auto-detection)
         """
-        self.api_key = api_key or settings.OPENAI_API_KEY
-        self.client = OpenAI(api_key=self.api_key)
-        self.model = settings.OPENAI_MODEL
+        self.ai_client = AIClient(provider=provider)
     
     def generate_script(
         self,
@@ -38,23 +36,18 @@ class ScriptGenerator:
             topic: The topic for the video script
             duration: Target duration in seconds
             style: Style of the script (informative, entertaining, educational, etc.)
-            **kwargs: Additional parameters to pass to the API
+            **kwargs: Additional parameters to pass to the AI API
         
         Returns:
             Generated script text
         """
         prompt = self._build_prompt(topic, duration, style)
         
-        response = self.client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {"role": "system", "content": "You are a professional video script writer."},
-                {"role": "user", "content": prompt}
-            ],
+        return self.ai_client.generate_text(
+            prompt=prompt,
+            system_message="You are a professional video script writer.",
             **kwargs
         )
-        
-        return response.choices[0].message.content
     
     def _build_prompt(self, topic: str, duration: int, style: str) -> str:
         """Build the prompt for script generation."""
@@ -71,3 +64,4 @@ class ScriptGenerator:
         
         Please provide only the script text, without any additional formatting or labels.
         """
+
