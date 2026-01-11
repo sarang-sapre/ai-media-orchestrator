@@ -36,25 +36,49 @@ def main():
         # 1. Generate Script
         topic = input("Enter a topic for the video: ") or "Artificial Intelligence"
         print(f"\n📝 Generating script for topic: '{topic}'...")
-        script = script_gen.generate_script(topic, duration=30, style="engaging")
+        script_text, keywords = script_gen.generate_script(topic, duration=30, style="engaging")
         print("✅ Script generated!")
-        print(f"Preview: {script[:100]}...\n")
+        print(f"Preview: {script_text[:100]}...\n")
+        print(f"Visual Keywords: {keywords}")
         
         # 2. Generate Voiceover
         print("🗣️  Generating voiceover...")
         audio_path = settings.AUDIO_DIR / "voiceover.wav"
-        voice_gen.generate_voice(script, output_path=audio_path)
+        voice_gen.generate_voice(script_text, output_path=audio_path)
         print(f"✅ Voiceover saved to: {audio_path}")
         
-        # Get audio duration (approximate or use ffprobe? For now, assume script length or just use fallback)
-        # We need duration to fetch enough stock videos. 
-        # A simple estimation: 150 words ~ 1 minute.
+        # Get audio duration
+        audio_duration = video_editor.get_media_duration(audio_path)
+        print(f"⏱️  Audio duration: {audio_duration:.2f}s")
         
         # 3. Fetch Stock Videos (or fallback)
         print("\n🎥 Fetching visual assets...")
-        # Extract simple keyword from topic
-        keyword = topic.split()[0] 
-        video_clips = stock_fetcher.fetch_videos_for_script(script, keywords=[keyword, "abstract"])
+        video_clips = []
+        
+        # Calculate how many clips we need (approx 5-10s per clip)
+        target_clip_count = max(5, int(audio_duration / 5) + 2) # +2 for safety
+        
+        if keywords:
+            # Use generated keywords
+            print(f"   Searching for: {', '.join(keywords)}")
+            for keyword in keywords:
+                if len(video_clips) >= target_clip_count:
+                    break
+                new_clips = stock_fetcher.fetch_videos_for_script(script_text, keywords=[keyword])
+                video_clips.extend(new_clips)
+        
+        # If we still don't have enough, fill with generic
+        if len(video_clips) < target_clip_count:
+            print("   Fetching additional generic clips...")
+            generic_keywords = [topic.split()[0], "abstract", "technology", "nature", "background"]
+            for keyword in generic_keywords:
+                if len(video_clips) >= target_clip_count:
+                    break
+                new_clips = stock_fetcher.fetch_videos_for_script(script_text, keywords=[keyword])
+                video_clips.extend(new_clips)
+        
+        # Dedup clips (by path)
+        video_clips = list(dict.fromkeys(video_clips))
         
         final_video_path = settings.OUTPUT_DIR / "final_output.mp4"
         
@@ -64,10 +88,7 @@ def main():
             video_editor.create_video_from_clips(video_clips, audio_path, output_path=final_video_path)
         else:
             print("⚠️  No stock videos found (check API key). Generating dummy video instead.")
-            # Estimate duration from audio file size? Or just hardcode 30s.
-            # Ideally we check audio length.
-            # For simplicity, stick to requested 30s script duration.
-            video_editor.generate_dummy_video(duration=30, output_path=settings.VIDEO_DIR / "dummy_base.mp4")
+            video_editor.generate_dummy_video(duration=audio_duration, output_path=settings.VIDEO_DIR / "dummy_base.mp4")
             video_editor.combine_video_and_audio(
                 settings.VIDEO_DIR / "dummy_base.mp4",
                 audio_path,

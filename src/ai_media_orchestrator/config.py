@@ -23,9 +23,9 @@ class Settings:
     ASSETS_DIR = Path(__file__).parent / "assets"
     AUDIO_DIR = ASSETS_DIR / "audio"
     VIDEO_DIR = ASSETS_DIR / "video"
-    VIDEO_DIR = ASSETS_DIR / "video"
     OUTPUT_DIR = ASSETS_DIR / "output"
     MODELS_DIR = ASSETS_DIR / "models"
+    SCRIPTS_DIR = ASSETS_DIR / "scripts"
 
     
     # AI Provider Configuration
@@ -68,7 +68,7 @@ class Settings:
     
     def _create_directories(self):
         """Create asset directories if they don't exist."""
-        for directory in [self.AUDIO_DIR, self.VIDEO_DIR, self.OUTPUT_DIR, self.MODELS_DIR]:
+        for directory in [self.AUDIO_DIR, self.VIDEO_DIR, self.OUTPUT_DIR, self.MODELS_DIR, self.SCRIPTS_DIR]:
             directory.mkdir(parents=True, exist_ok=True)
     
     def get_active_provider(self) -> str:

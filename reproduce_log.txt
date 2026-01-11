@@ -1,0 +1,17 @@
+DEBUG: Starting reproduction script...
+DEBUG: Active provider: ollama
+DEBUG: Generating script for topic: 'AI for Business'
+DEBUG_RAW_RESPONSE:
+Here's the output in exactly TWO sections separated by ---SPLIT---
+
+The AI revolution isn't just about robots anymore - it's about making businesses more efficient, accurate, and innovative. By harnessing the power of machine learning, companies can automate tedious tasks, analyze complex data sets, and make predictions that drive real results.
+---SPLIT---
+machine learning, business intelligence, automation, data analysis, industry insights
+END_DEBUG_RAW_RESPONSE
+DEBUG: Saved script to D:\GIT\ai-media-orchestrator\src\ai_media_orchestrator\assets\scripts\script_20260102_233316_AI_for_Business.txt
+
+==================================================
+FINAL CLEAN SCRIPT OUTPUT:
+==================================================
+Here's the output in exactly TWO sections separated by
+==================================================

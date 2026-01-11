@@ -36,6 +36,22 @@ class VideoEditor:
         except subprocess.CalledProcessError as e:
             print(f"FFmpeg Error: {e.stderr}")
             raise RuntimeError(f"FFmpeg command failed: {e.stderr}") from e
+            
+    def get_media_duration(self, file_path: Path) -> float:
+        """Get duration of media file in seconds using ffprobe."""
+        cmd = [
+            self.ffmpeg_exe.replace("ffmpeg", "ffprobe"),
+            "-v", "error",
+            "-show_entries", "format=duration",
+            "-of", "default=noprint_wrappers=1:nokey=1",
+            str(file_path)
+        ]
+        try:
+            result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+            return float(result.stdout.strip())
+        except Exception as e:
+            print(f"Error getting duration for {file_path}: {e}")
+            return 0.0
 
     def combine_video_and_audio(
         self,
@@ -56,14 +72,17 @@ class VideoEditor:
         # We also want to ensure the audio replaces existing audio (if any).
         # And we might want to trim/loop. For simple replace:
         
+        # Loop video indefinitely and cut at audio length
         cmd = [
+            "-stream_loop", "-1",  # Loop input 0 (video) indefinitely
             "-i", str(video_path),
             "-i", str(audio_path),
             "-c:v", "copy",
             "-c:a", "aac",
             "-map", "0:v:0",
             "-map", "1:a:0",
-            "-shortest", # Finish when shortest input ends
+            "-shortest",  # Finish when shortest input (audio) ends
+            "-fflags", "+shortest", 
             str(output_path)
         ]
         
@@ -147,11 +166,15 @@ class VideoEditor:
         if output_path is None:
             output_path = self.output_dir / f"norm_{video_path.name}"
             
-        # Skip if already exists? Maybe not, safer to overwrite/ensure freshness.
-        
+        # Parse resolution from settings
+        try:
+            width, height = settings.VIDEO_RESOLUTION.split("x")
+        except ValueError:
+            width, height = "1920", "1080"
+            
         cmd = [
             "-i", str(video_path),
-            "-vf", "scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2,fps=30",
+            "-vf", f"scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,fps={self.fps}",
             "-c:v", "libx264",
             "-preset", "fast",
             "-crf", "23",
@@ -225,9 +248,15 @@ class VideoEditor:
         if output_path is None:
             output_path = self.output_dir / "dummy_video.mp4"
             
+        # Parse resolution
+        try:
+            width, height = settings.VIDEO_RESOLUTION.split("x")
+        except ValueError:
+            width, height = "1920", "1080"
+            
         cmd = [
             "-f", "lavfi",
-            "-i", f"color=c={color}:s=1280x720:d={duration}",
+            "-i", f"color=c={color}:s={width}x{height}:d={duration}",
             "-c:v", "libx264",
             "-t", str(duration),
             str(output_path)
