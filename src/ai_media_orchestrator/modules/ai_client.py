@@ -4,10 +4,19 @@ Provides a consistent interface for text generation across different AI services
 """
 
 from typing import Optional, List, Dict
+import logging
 from openai import OpenAI
 from google import genai
+try:
+    import tiktoken
+    TIKTOKEN_AVAILABLE = True
+except ImportError:
+    TIKTOKEN_AVAILABLE = False
+    logging.warning("tiktoken not available. Token counting will use estimation.")
 
 from ai_media_orchestrator.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 class AIClient:
@@ -25,6 +34,7 @@ class AIClient:
         """
         self.provider = provider or settings.get_active_provider()
         self._initialize_client()
+        self._initialize_tokenizer()
 
     def _initialize_client(self):
         """Initialize the appropriate client based on the provider."""
@@ -49,6 +59,62 @@ class AIClient:
 
         else:
             raise ValueError(f"Unsupported provider: {self.provider}")
+
+    def _initialize_tokenizer(self):
+        """Initialize the tokenizer for token counting."""
+        self.tokenizer = None
+        if TIKTOKEN_AVAILABLE and self.provider in ["openai", "ollama"]:
+            try:
+                # Try to get encoding for the specific model
+                self.tokenizer = tiktoken.encoding_for_model(self.model)
+            except KeyError:
+                # Fallback to cl100k_base encoding (used by gpt-4, gpt-3.5-turbo)
+                logger.warning(f"No tokenizer found for model {self.model}, using cl100k_base")
+                self.tokenizer = tiktoken.get_encoding("cl100k_base")
+
+    def count_tokens(self, text: str) -> int:
+        """
+        Count the number of tokens in a text string.
+        
+        Args:
+            text: The text to count tokens for
+            
+        Returns:
+            Number of tokens (estimated if tiktoken not available)
+        """
+        if self.tokenizer:
+            return len(self.tokenizer.encode(text))
+        else:
+            # Rough estimation: ~4 characters per token
+            return len(text) // 4
+
+    def count_message_tokens(self, messages: List[Dict[str, str]]) -> int:
+        """
+        Count tokens in a list of messages.
+        
+        Args:
+            messages: List of message dictionaries with 'role' and 'content'
+            
+        Returns:
+            Total number of tokens including message formatting overhead
+        """
+        if not self.tokenizer:
+            # Rough estimation
+            total = sum(len(msg.get("content", "")) for msg in messages) // 4
+            return total + len(messages) * 4  # Add overhead per message
+        
+        # OpenAI format token counting
+        # Based on: https://github.com/openai/openai-cookbook/blob/main/examples/How_to_count_tokens_with_tiktoken.ipynb
+        num_tokens = 0
+        for message in messages:
+            num_tokens += 4  # Every message follows <im_start>{role/name}\n{content}<im_end>\n
+            for key, value in message.items():
+                num_tokens += len(self.tokenizer.encode(str(value)))
+                if key == "name":  # If there's a name, the role is omitted
+                    num_tokens -= 1  # Role is always required and always 1 token
+        
+        num_tokens += 2  # Every reply is primed with <im_start>assistant
+        return num_tokens
 
     def generate_text(
         self,
@@ -87,6 +153,10 @@ class AIClient:
         else:
             contents = prompt
 
+        # Count and log tokens
+        token_count = self.count_tokens(contents)
+        logger.info(f"[{self.provider}] Sending request with ~{token_count} input tokens")
+
         response = self.client.models.generate_content(
             model=self.model,
             contents=contents,
@@ -112,6 +182,10 @@ class AIClient:
             messages.append({"role": "system", "content": system_message})
 
         messages.append({"role": "user", "content": prompt})
+
+        # Count and log tokens
+        token_count = self.count_message_tokens(messages)
+        logger.info(f"[{self.provider}] Sending request with ~{token_count} input tokens")
 
         api_params = {
             "model": self.model,
@@ -148,6 +222,10 @@ class AIClient:
 
             prompt_text = "\n".join(combined_prompt)
 
+            # Count and log tokens
+            token_count = self.count_tokens(prompt_text)
+            logger.info(f"[{self.provider}] Sending chat request with ~{token_count} input tokens")
+
             response = self.client.models.generate_content(
                 model=self.model,
                 contents=prompt_text,
@@ -155,6 +233,10 @@ class AIClient:
             return response.text
 
         if self.provider in ["openai", "ollama"]:
+            # Count and log tokens
+            token_count = self.count_message_tokens(messages)
+            logger.info(f"[{self.provider}] Sending chat request with ~{token_count} input tokens")
+
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
