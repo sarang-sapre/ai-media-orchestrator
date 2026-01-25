@@ -39,8 +39,11 @@ class VideoEditor:
             
     def get_media_duration(self, file_path: Path) -> float:
         """Get duration of media file in seconds using ffprobe."""
+        # Get ffprobe path by replacing ffmpeg with ffprobe (handle .exe on Windows)
+        ffprobe_exe = self.ffmpeg_exe.replace("ffmpeg.exe", "ffprobe.exe").replace("ffmpeg", "ffprobe")
+        
         cmd = [
-            self.ffmpeg_exe.replace("ffmpeg", "ffprobe"),
+            ffprobe_exe,
             "-v", "error",
             "-show_entries", "format=duration",
             "-of", "default=noprint_wrappers=1:nokey=1",
